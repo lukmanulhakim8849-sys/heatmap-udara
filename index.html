@@ -3,434 +3,389 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Heatmap Kualitas Udara</title>
-
-<!-- Leaflet CSS & JS -->
+<title>Kontur Kualitas Udara</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<!-- Leaflet.heat plugin -->
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Segoe UI',Arial,sans-serif; background:#0f0f1f; color:#fff; height:100vh; display:flex; flex-direction:column; }
 
-  body {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    background: #0f0f1f;
-    color: #fff;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
+.header { background:#1a1a2e; border-bottom:1px solid #2a2a4a; padding:10px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.header-title { font-size:15px; font-weight:600; }
+.header-sub { font-size:11px; color:#888; }
+.stats { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+.stat { background:#252540; border:1px solid #3a3a5c; border-radius:8px; padding:5px 12px; text-align:center; min-width:76px; }
+.stat-label { font-size:10px; color:#888; margin-bottom:2px; }
+.stat-val { font-size:17px; font-weight:600; }
 
-  /* ── Header ── */
-  .header {
-    background: #1a1a2e;
-    border-bottom: 1px solid #2a2a4a;
-    padding: 12px 20px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-  .header h1 {
-    font-size: 16px;
-    font-weight: 600;
-    color: #fff;
-  }
-  .header-sub {
-    font-size: 12px;
-    color: #888;
-  }
+.controls { background:#141428; padding:7px 18px; display:flex; gap:7px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #2a2a4a; }
+.controls label { font-size:11px; color:#888; }
+.btn { background:#252540; border:1px solid #3a3a5c; border-radius:6px; color:#fff; padding:5px 13px; font-size:12px; cursor:pointer; transition:background .2s; }
+.btn:hover { background:#3a3a6a; }
+.btn.active { background:#4f46e5; border-color:#6366f1; }
+.refresh-btn { background:#166534; border-color:#22c55e; margin-left:auto; }
+.refresh-btn:hover { background:#15803d; }
 
-  /* ── Stat cards ── */
-  .stats {
-    display: flex;
-    gap: 10px;
-    margin-left: auto;
-    flex-wrap: wrap;
-  }
-  .stat {
-    background: #252540;
-    border: 1px solid #3a3a5c;
-    border-radius: 8px;
-    padding: 6px 14px;
-    text-align: center;
-    min-width: 80px;
-  }
-  .stat-label { font-size: 10px; color: #888; margin-bottom: 2px; }
-  .stat-val   { font-size: 18px; font-weight: 600; }
+.map-wrap { position:relative; flex:1; display:flex; flex-direction:column; }
+#map { flex:1; width:100%; }
 
-  /* ── Controls ── */
-  .controls {
-    background: #141428;
-    padding: 8px 20px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-    border-bottom: 1px solid #2a2a4a;
-  }
-  .controls label { font-size: 12px; color: #888; }
-  .btn {
-    background: #252540;
-    border: 1px solid #3a3a5c;
-    border-radius: 6px;
-    color: #fff;
-    padding: 5px 14px;
-    font-size: 12px;
-    cursor: pointer;
-    transition: background .2s;
-  }
-  .btn:hover  { background: #3a3a6a; }
-  .btn.active { background: #4f46e5; border-color: #6366f1; }
-  .refresh-btn {
-    background: #166534;
-    border-color: #22c55e;
-    margin-left: auto;
-  }
-  .refresh-btn:hover { background: #15803d; }
+/* Legend */
+.legend { position:absolute; bottom:28px; right:10px; background:rgba(10,10,25,.93); border:1px solid #3a3a5c; border-radius:10px; padding:12px 16px; z-index:1000; font-size:12px; min-width:190px; }
+.legend h4 { margin-bottom:10px; font-size:10px; color:#aaa; text-transform:uppercase; letter-spacing:.6px; }
+.legend-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; line-height:1.3; }
+.legend-swatch { width:32px; height:14px; border-radius:3px; flex-shrink:0; border:1px solid rgba(255,255,255,.12); }
+.legend-label { font-size:11px; }
+.legend-val { font-size:10px; color:#888; margin-left:auto; }
 
-  /* ── Map ── */
-  #map {
-    flex: 1;
-    width: 100%;
-  }
+/* Popup */
+.popup-content { font-family:'Segoe UI',Arial,sans-serif; min-width:180px; }
+.popup-title { font-weight:600; font-size:13px; margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:5px; }
+.popup-row { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#333; margin-bottom:3px; }
+.popup-badge { display:inline-block; padding:3px 10px; border-radius:5px; font-size:11px; font-weight:700; margin-top:6px; }
 
-  /* ── Legend ── */
-  .legend {
-    position: absolute;
-    bottom: 30px;
-    right: 10px;
-    background: rgba(15,15,31,.9);
-    border: 1px solid #3a3a5c;
-    border-radius: 8px;
-    padding: 10px 14px;
-    z-index: 1000;
-    font-size: 12px;
-  }
-  .legend h4 { margin-bottom: 8px; font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: .5px; }
-  .legend-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
-
-  /* ── Popup custom ── */
-  .popup-content { font-family: 'Segoe UI', Arial, sans-serif; }
-  .popup-title   { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
-  .popup-row     { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #444; margin-bottom: 2px; }
-  .popup-badge   { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-top: 4px; }
-
-  /* ── Loading overlay ── */
-  #loading {
-    position: absolute;
-    inset: 0;
-    background: rgba(15,15,31,.85);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-    gap: 12px;
-  }
-  .spinner {
-    width: 36px; height: 36px;
-    border: 3px solid #3a3a5c;
-    border-top-color: #6366f1;
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── No-data message ── */
-  #nodata {
-    display: none;
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%,-50%);
-    text-align: center;
-    z-index: 1000;
-    background: rgba(15,15,31,.95);
-    padding: 24px 32px;
-    border-radius: 12px;
-    border: 1px solid #3a3a5c;
-  }
-  #nodata h2 { font-size: 18px; margin-bottom: 8px; }
-  #nodata p  { font-size: 13px; color: #888; }
+/* Loading */
+#loading { position:absolute; inset:0; background:rgba(10,10,25,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2000; gap:12px; }
+.spinner { width:36px; height:36px; border:3px solid #3a3a5c; border-top-color:#6366f1; border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+#nodata { display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; z-index:1000; background:rgba(10,10,25,.96); padding:24px 32px; border-radius:12px; border:1px solid #3a3a5c; }
+#nodata h2 { font-size:17px; margin-bottom:8px; }
+#nodata p { font-size:12px; color:#888; line-height:1.6; }
 </style>
 </head>
 <body>
 
-<!-- ══ HEADER ══════════════════════════════════════════ -->
 <div class="header">
   <div>
-    <div class="header h1" style="font-size:16px;font-weight:600;">
-      📡 Heatmap Kualitas Udara
-    </div>
+    <div class="header-title">🗺️ Kontur Kualitas Udara PM</div>
     <div class="header-sub" id="last-update">Memuat data...</div>
   </div>
   <div class="stats">
-    <div class="stat">
-      <div class="stat-label">PM2.5 avg</div>
-      <div class="stat-val" id="avg-pm25" style="color:#facc15">—</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">PM10 avg</div>
-      <div class="stat-val" id="avg-pm10" style="color:#fb923c">—</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Titik data</div>
-      <div class="stat-val" id="total-points" style="color:#60a5fa">—</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Status</div>
-      <div class="stat-val" id="worst-status" style="font-size:11px;padding-top:4px">—</div>
-    </div>
+    <div class="stat"><div class="stat-label">PM2.5 avg</div><div class="stat-val" id="avg-pm25" style="color:#facc15">—</div></div>
+    <div class="stat"><div class="stat-label">PM10 avg</div><div class="stat-val" id="avg-pm10" style="color:#fb923c">—</div></div>
+    <div class="stat"><div class="stat-label">Titik data</div><div class="stat-val" id="total-points" style="color:#60a5fa">—</div></div>
+    <div class="stat"><div class="stat-label">Terburuk</div><div class="stat-val" id="worst-status" style="font-size:10px;padding-top:5px">—</div></div>
   </div>
 </div>
 
-<!-- ══ CONTROLS ════════════════════════════════════════ -->
 <div class="controls">
-  <label>Layer:</label>
+  <label>Parameter:</label>
   <button class="btn active" onclick="setLayer('pm25',this)">PM2.5</button>
   <button class="btn"        onclick="setLayer('pm10',this)">PM10</button>
   <button class="btn"        onclick="setLayer('pm1',this)">PM1.0</button>
-
-  <label style="margin-left:12px">Tampilan:</label>
-  <button class="btn active" id="btn-heat"  onclick="toggleView('heat',this)">Heatmap</button>
-  <button class="btn"        id="btn-route" onclick="toggleView('route',this)">Rute</button>
-  <button class="btn"        id="btn-both"  onclick="toggleView('both',this)">Keduanya</button>
-
+  <label style="margin-left:10px">Tampilan:</label>
+  <button class="btn active" id="btn-kontur" onclick="setView('kontur',this)">Kontur</button>
+  <button class="btn"        id="btn-rute"   onclick="setView('rute',this)">Rute</button>
+  <button class="btn"        id="btn-both"   onclick="setView('both',this)">Keduanya</button>
+  <label style="margin-left:10px">Resolusi:</label>
+  <button class="btn active" id="res-med" onclick="setRes(60,this)">Normal</button>
+  <button class="btn"        id="res-hi"  onclick="setRes(30,this)">Detail</button>
   <button class="btn refresh-btn" onclick="loadData()">🔄 Refresh</button>
 </div>
 
-<!-- ══ MAP ═════════════════════════════════════════════ -->
-<div style="position:relative;flex:1;display:flex;flex-direction:column;">
+<div class="map-wrap">
   <div id="map"></div>
 
-  <!-- Legend -->
   <div class="legend">
-    <h4>Kualitas Udara (PM2.5)</h4>
-    <div class="legend-row"><div class="legend-dot" style="background:#22c55e"></div> Baik · 0–15 µg/m³</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#eab308"></div> Sedang · 16–35 µg/m³</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#f97316"></div> Kurang sehat · 36–55 µg/m³</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div> Tidak sehat · 56–150 µg/m³</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#7c3aed"></div> Sangat buruk · 150+ µg/m³</div>
+    <h4 id="legend-title">Zona Kualitas Udara · PM2.5</h4>
+    <div class="legend-row"><div class="legend-swatch" style="background:rgba(34,197,94,0.72)"></div><span class="legend-label">Baik</span><span class="legend-val">0–15 µg/m³</span></div>
+    <div class="legend-row"><div class="legend-swatch" style="background:rgba(234,179,8,0.72)"></div><span class="legend-label">Sedang</span><span class="legend-val">16–35 µg/m³</span></div>
+    <div class="legend-row"><div class="legend-swatch" style="background:rgba(249,115,22,0.72)"></div><span class="legend-label">Kurang sehat</span><span class="legend-val">36–55 µg/m³</span></div>
+    <div class="legend-row"><div class="legend-swatch" style="background:rgba(239,68,68,0.72)"></div><span class="legend-label">Tidak sehat</span><span class="legend-val">56–150 µg/m³</span></div>
+    <div class="legend-row"><div class="legend-swatch" style="background:rgba(124,58,237,0.72)"></div><span class="legend-label">Sangat buruk</span><span class="legend-val">150+ µg/m³</span></div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #3a3a5c;font-size:10px;color:#666">Kontur via interpolasi IDW</div>
   </div>
 
-  <!-- Loading -->
   <div id="loading">
     <div class="spinner"></div>
-    <div style="font-size:13px;color:#888">Mengambil data dari Google Sheets...</div>
+    <div style="font-size:13px;color:#888">Menghitung kontur zona udara...</div>
   </div>
 
-  <!-- No data -->
   <div id="nodata">
     <h2>Belum ada data</h2>
-    <p>Arduino belum mengirim data ke Google Sheets.<br>Pastikan perangkat sudah aktif dan terhubung WiFi.</p>
+    <p>Arduino belum mengirim data ke Google Sheets.<br>Pastikan perangkat aktif dan terhubung WiFi.</p>
   </div>
 </div>
 
 <script>
-// ══════════════════════════════════════════════════════
-//  GANTI DENGAN SCRIPT ID / URL APPS SCRIPT KAMU
-//  Setelah deploy Apps Script, URL bentuknya:
-//  https://script.google.com/macros/s/XXXX/exec
-// ══════════════════════════════════════════════════════
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoDdNQ_DhLhrk3YUpxB7QktitPeTKKyuD7F8S9UQLjtIChqTYCN4kp7KGR7UuSyMDZ/exec";
+// ══════════════════════════════════════════════════
+// GANTI DENGAN URL APPS SCRIPT KAMU
+// ══════════════════════════════════════════════════
+const APPS_SCRIPT_URL = "AKfycbwoDdNQ_DhLhrk3YUpxB7QktitPeTKKyuD7F8S9UQLjtIChqTYCN4kp7KGR7UuSyMDZ";
 
-// ── State ─────────────────────────────────────────────
-let allData    = [];
+// ── State ──────────────────────────────────────────
+let allData     = [];
 let activeLayer = "pm25";
-let viewMode    = "both";   // heat | route | both
-let heatLayer   = null;
+let viewMode    = "both";
+let gridSize    = 60;     // resolusi grid kontur (px)
+let konturLayer = null;
 let routeLayer  = null;
-let markerLayer = null;
+let markerGroup = null;
 
-// ── Map init ──────────────────────────────────────────
-const map = L.map("map", { zoomControl: true }).setView([-6.2, 106.816], 13);
-
+// ── Map ────────────────────────────────────────────
+const map = L.map("map", { zoomControl:true }).setView([-6.2, 106.816], 14);
 L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-  attribution: "© OpenStreetMap © CARTO",
-  maxZoom: 19
+  attribution:"© OpenStreetMap © CARTO", maxZoom:19
 }).addTo(map);
 
-// ── Color helpers ─────────────────────────────────────
-function pm2color(v, layer) {
-  const th = layer === "pm25" ? [15,35,55,150]
-           : layer === "pm10" ? [50,100,250,350]
-           : [12,35,55,150];
-  if (v <= th[0]) return "#22c55e";
-  if (v <= th[1]) return "#eab308";
-  if (v <= th[2]) return "#f97316";
-  if (v <= th[3]) return "#ef4444";
-  return "#7c3aed";
+// Re-render kontur setiap kali peta di-zoom/pan
+map.on("moveend zoomend", () => { if (allData.length) renderKontur(); });
+
+// ── Threshold per layer ────────────────────────────
+const THRESH = {
+  pm25: [15, 35, 55, 150],
+  pm10: [50,100,250,350],
+  pm1 : [12, 35, 55,150]
+};
+const COLORS = [
+  [34,197, 94],   // Baik      — hijau
+  [234,179,  8],  // Sedang    — kuning
+  [249,115, 22],  // Kurang    — oranye
+  [239, 68, 68],  // Tidak     — merah
+  [124, 58,237]   // Sangat    — ungu
+];
+const LABELS = ["BAIK","SEDANG","KURANG SEHAT","TIDAK SEHAT","SANGAT BURUK"];
+
+function getZone(v) {
+  const th = THRESH[activeLayer];
+  if (v <= th[0]) return 0;
+  if (v <= th[1]) return 1;
+  if (v <= th[2]) return 2;
+  if (v <= th[3]) return 3;
+  return 4;
 }
 
+function getVal(d) {
+  return Number(activeLayer==="pm25" ? d.pm25 : activeLayer==="pm10" ? d.pm10 : d.pm1);
+}
+
+// ── IDW interpolasi ────────────────────────────────
+// Interpolasi nilai di titik (lat,lng) dari data sekitarnya
+function idw(lat, lng, points, power=2) {
+  let wSum=0, vSum=0;
+  for (const p of points) {
+    const d = Math.hypot(lat-p.lat, lng-p.lng);
+    if (d < 1e-10) return p.val; // tepat di titik
+    const w = 1 / Math.pow(d, power);
+    wSum += w;
+    vSum += w * p.val;
+  }
+  return wSum === 0 ? 0 : vSum / wSum;
+}
+
+// ── Render kontur ──────────────────────────────────
+function renderKontur() {
+  if (konturLayer) { map.removeLayer(konturLayer); konturLayer = null; }
+  if (!allData.length) return;
+
+  const points = allData.map(d => ({
+    lat: Number(d.lat), lng: Number(d.lng), val: getVal(d)
+  }));
+
+  // Batas wilayah dari data + padding
+  const lats = points.map(p=>p.lat), lngs = points.map(p=>p.lng);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
+  const padLat=(maxLat-minLat)*0.3 || 0.005;
+  const padLng=(maxLng-minLng)*0.3 || 0.005;
+
+  const bounds = L.latLngBounds(
+    [minLat-padLat, minLng-padLng],
+    [maxLat+padLat, maxLng+padLng]
+  );
+
+  // Buat canvas untuk kontur
+  const size   = gridSize;
+  const canvas = document.createElement("canvas");
+  canvas.width  = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  const imgData = ctx.createImageData(size, size);
+  const px      = imgData.data;
+
+  for (let row=0; row<size; row++) {
+    for (let col=0; col<size; col++) {
+      const lat = maxLat + padLat - (row / size) * (maxLat - minLat + 2*padLat);
+      const lng = minLng - padLng + (col / size) * (maxLng - minLng + 2*padLng);
+
+      const val  = idw(lat, lng, points);
+      const zone = getZone(val);
+      const [r,g,b] = COLORS[zone];
+
+      // Opacity: lebih tebal di dekat titik data
+      let minDist = Infinity;
+      for (const p of points) {
+        const d = Math.hypot(lat-p.lat, lng-p.lng);
+        if (d < minDist) minDist = d;
+      }
+      // Skala jarak ke opacity (0.0–0.75)
+      const maxReach = Math.max(
+        (maxLat-minLat+2*padLat),
+        (maxLng-minLng+2*padLng)
+      ) * 0.5;
+      const alpha = Math.max(0, Math.min(0.75, 1 - minDist/maxReach)) * 255;
+
+      const idx = (row*size + col)*4;
+      px[idx]   = r;
+      px[idx+1] = g;
+      px[idx+2] = b;
+      px[idx+3] = alpha;
+    }
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  // Overlay canvas ke peta sebagai ImageOverlay
+  const dataURL = canvas.toDataURL();
+  konturLayer   = L.imageOverlay(dataURL, bounds, { opacity:1, interactive:false });
+  konturLayer.addTo(map);
+  konturLayer.setZIndex(200);
+}
+
+// ── Render rute + marker ───────────────────────────
+function renderRoute() {
+  if (routeLayer)  { map.removeLayer(routeLayer);  routeLayer  = null; }
+  if (markerGroup) { map.removeLayer(markerGroup); markerGroup = null; }
+  if (!allData.length) return;
+
+  const latlngs = allData.map(d=>[Number(d.lat),Number(d.lng)]);
+
+  // Garis rute putih tipis
+  routeLayer = L.polyline(latlngs, { color:"rgba(255,255,255,0.5)", weight:3, dashArray:"6,4" }).addTo(map);
+
+  markerGroup = L.layerGroup();
+  allData.forEach((d,i) => {
+    const val  = getVal(d);
+    const zone = getZone(val);
+    const [r,g,b] = COLORS[zone];
+    const color = `rgb(${r},${g},${b})`;
+    const isEnd = i===0 || i===allData.length-1;
+    const ql    = qualityLabel(Number(d.pm25));
+
+    const m = L.circleMarker([Number(d.lat),Number(d.lng)], {
+      radius: isEnd ? 10 : 7,
+      fillColor: color,
+      color: "#fff",
+      weight: isEnd ? 2 : 1.5,
+      fillOpacity: 0.95
+    });
+
+    m.bindPopup(`
+      <div class="popup-content">
+        <div class="popup-title">
+          ${i===0?"🟢 START · ":i===allData.length-1?"🔴 END · ":"📍 "}
+          ${d.timestamp || "Titik "+(i+1)}
+        </div>
+        <div class="popup-row"><span>PM1.0</span><b>${d.pm1} µg/m³</b></div>
+        <div class="popup-row"><span>PM2.5</span><b>${d.pm25} µg/m³</b></div>
+        <div class="popup-row"><span>PM10</span><b>${d.pm10} µg/m³</b></div>
+        <div class="popup-row"><span>Koordinat</span><span>${Number(d.lat).toFixed(5)}, ${Number(d.lng).toFixed(5)}</span></div>
+        <span class="popup-badge" style="background:${ql.bg};color:${ql.fg}">${ql.text}</span>
+      </div>
+    `, { maxWidth:220 });
+
+    markerGroup.addLayer(m);
+  });
+  markerGroup.addTo(map);
+}
+
+// ── Render semua layer ─────────────────────────────
+function renderAll() {
+  if (viewMode==="kontur" || viewMode==="both") renderKontur();
+  else { if(konturLayer){map.removeLayer(konturLayer);konturLayer=null;} }
+
+  if (viewMode==="rute" || viewMode==="both") renderRoute();
+  else {
+    if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
+    if(markerGroup){map.removeLayer(markerGroup);markerGroup=null;}
+  }
+}
+
+// ── Color helpers ──────────────────────────────────
 function qualityLabel(v) {
-  if (v <= 15)  return { text:"BAIK",         bg:"#166534", fg:"#dcfce7" };
-  if (v <= 35)  return { text:"SEDANG",       bg:"#854d0e", fg:"#fef9c3" };
-  if (v <= 55)  return { text:"KURANG SEHAT", bg:"#9a3412", fg:"#ffedd5" };
-  if (v <= 150) return { text:"TIDAK SEHAT",  bg:"#991b1b", fg:"#fee2e2" };
-  return              { text:"SANGAT BURUK",  bg:"#4c1d95", fg:"#ede9fe" };
+  if (v<=15)  return {text:"BAIK",        bg:"#166534",fg:"#dcfce7"};
+  if (v<=35)  return {text:"SEDANG",      bg:"#854d0e",fg:"#fef9c3"};
+  if (v<=55)  return {text:"KURANG SEHAT",bg:"#9a3412",fg:"#ffedd5"};
+  if (v<=150) return {text:"TIDAK SEHAT", bg:"#991b1b",fg:"#fee2e2"};
+  return            {text:"SANGAT BURUK", bg:"#4c1d95",fg:"#ede9fe"};
 }
 
-// ── Load data from Apps Script ────────────────────────
+// ── Load data ──────────────────────────────────────
 async function loadData() {
   document.getElementById("loading").style.display = "flex";
   document.getElementById("nodata").style.display  = "none";
-
   try {
-    const url = APPS_SCRIPT_URL + "?action=getData&t=" + Date.now();
-    const res  = await fetch(url);
+    const res  = await fetch(APPS_SCRIPT_URL + "?action=getData&t=" + Date.now());
     const json = await res.json();
-
-    if (!json.success || !json.data || json.data.length === 0) {
-      document.getElementById("loading").style.display = "none";
-      document.getElementById("nodata").style.display  = "block";
+    if (!json.success || !json.data || json.data.length===0) {
+      document.getElementById("nodata").style.display = "block";
       return;
     }
-
-    // Filter: hanya titik dengan koordinat valid
     allData = json.data.filter(d =>
-      d.lat && d.lng &&
-      Math.abs(d.lat) > 0.001 &&
-      Math.abs(d.lng) > 0.001
+      d.lat && d.lng && Math.abs(d.lat)>0.001 && Math.abs(d.lng)>0.001
     );
-
     updateStats();
-    renderLayers();
-
-    // Auto-zoom ke data
-    if (allData.length > 0) {
-      const latlngs = allData.map(d => [d.lat, d.lng]);
-      map.fitBounds(L.latLngBounds(latlngs).pad(0.1));
+    renderAll();
+    if (allData.length) {
+      const ll = allData.map(d=>[Number(d.lat),Number(d.lng)]);
+      map.fitBounds(L.latLngBounds(ll).pad(0.15));
     }
-
     document.getElementById("last-update").textContent =
-      "Update terakhir: " + new Date().toLocaleString("id-ID");
-
-  } catch (err) {
-    console.error("Gagal load data:", err);
+      "Update: " + new Date().toLocaleString("id-ID");
+  } catch(e) {
     document.getElementById("nodata").innerHTML =
-      "<h2>❌ Gagal memuat data</h2><p>Periksa APPS_SCRIPT_URL di kode ini.<br>" + err.message + "</p>";
+      "<h2>❌ Gagal memuat data</h2><p>Periksa APPS_SCRIPT_URL.<br>"+e.message+"</p>";
     document.getElementById("nodata").style.display = "block";
   } finally {
     document.getElementById("loading").style.display = "none";
   }
 }
 
-// ── Update stat cards ─────────────────────────────────
+// ── Stat cards ─────────────────────────────────────
 function updateStats() {
   if (!allData.length) return;
-
-  const avg = arr => Math.round(arr.reduce((a,b) => a+b, 0) / arr.length);
-  const pm25vals = allData.map(d => Number(d.pm25));
-  const pm10vals = allData.map(d => Number(d.pm10));
-
-  document.getElementById("avg-pm25").textContent  = avg(pm25vals);
-  document.getElementById("avg-pm10").textContent  = avg(pm10vals);
+  const avg = arr => Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
+  const v25 = allData.map(d=>Number(d.pm25));
+  const v10 = allData.map(d=>Number(d.pm10));
+  document.getElementById("avg-pm25").textContent = avg(v25);
+  document.getElementById("avg-pm10").textContent = avg(v10);
   document.getElementById("total-points").textContent = allData.length;
-
-  const maxPm25 = Math.max(...pm25vals);
-  const ql = qualityLabel(maxPm25);
+  const ql = qualityLabel(Math.max(...v25));
   const ws = document.getElementById("worst-status");
-  ws.textContent        = ql.text;
-  ws.style.color        = ql.fg;
+  ws.textContent = ql.text; ws.style.color = ql.fg;
 }
 
-// ── Render map layers ─────────────────────────────────
-function renderLayers() {
-  // Hapus layer lama
-  if (heatLayer)   { map.removeLayer(heatLayer);   heatLayer   = null; }
-  if (routeLayer)  { map.removeLayer(routeLayer);  routeLayer  = null; }
-  if (markerLayer) { map.removeLayer(markerLayer); markerLayer = null; }
-
-  if (!allData.length) return;
-
-  const getVal = d => Number(
-    activeLayer === "pm25" ? d.pm25 :
-    activeLayer === "pm10" ? d.pm10 : d.pm1
-  );
-
-  // ── Heatmap layer ────────────────────────────────────
-  if (viewMode === "heat" || viewMode === "both") {
-    const maxVal = Math.max(...allData.map(getVal)) || 1;
-    const heatPoints = allData.map(d => [
-      Number(d.lat), Number(d.lng), getVal(d) / maxVal
-    ]);
-    heatLayer = L.heatLayer(heatPoints, {
-      radius: 30,
-      blur: 20,
-      maxZoom: 17,
-      gradient: { 0.0:"#22c55e", 0.3:"#eab308", 0.55:"#f97316", 0.75:"#ef4444", 1.0:"#7c3aed" }
-    }).addTo(map);
-  }
-
-  // ── Route + marker layer ─────────────────────────────
-  if (viewMode === "route" || viewMode === "both") {
-    markerLayer = L.layerGroup();
-
-    // Gambar garis rute
-    const latlngs = allData.map(d => [Number(d.lat), Number(d.lng)]);
-    routeLayer = L.polyline(latlngs, { color:"rgba(255,255,255,0.25)", weight:3 }).addTo(map);
-
-    // Titik-titik dengan warna kualitas udara
-    allData.forEach((d, i) => {
-      const val   = getVal(d);
-      const color = pm2color(val, activeLayer);
-      const ql    = qualityLabel(Number(d.pm25));
-      const isEnd = i === 0 || i === allData.length - 1;
-
-      const marker = L.circleMarker([Number(d.lat), Number(d.lng)], {
-        radius     : isEnd ? 10 : 7,
-        fillColor  : color,
-        color      : "#fff",
-        weight     : 1.5,
-        fillOpacity: 0.95
-      });
-
-      // Popup detail
-      marker.bindPopup(`
-        <div class="popup-content">
-          <div class="popup-title">
-            ${i === 0 ? "🟢 START · " : i === allData.length-1 ? "🔴 END · " : ""}
-            ${d.timestamp || "Titik " + (i+1)}
-          </div>
-          <div class="popup-row"><span>PM1.0</span><b>${d.pm1} µg/m³</b></div>
-          <div class="popup-row"><span>PM2.5</span><b>${d.pm25} µg/m³</b></div>
-          <div class="popup-row"><span>PM10</span><b>${d.pm10} µg/m³</b></div>
-          <div class="popup-row"><span>Koordinat</span><span>${Number(d.lat).toFixed(5)}, ${Number(d.lng).toFixed(5)}</span></div>
-          <span class="popup-badge" style="background:${ql.bg};color:${ql.fg}">${ql.text}</span>
-        </div>
-      `, { maxWidth: 220 });
-
-      markerLayer.addLayer(marker);
-    });
-
-    markerLayer.addTo(map);
-  }
-}
-
-// ── Controls ──────────────────────────────────────────
+// ── Control handlers ───────────────────────────────
 function setLayer(layer, btn) {
   activeLayer = layer;
   document.querySelectorAll(".controls .btn").forEach(b => {
-    if (["PM2.5","PM10","PM1.0"].includes(b.textContent)) b.classList.remove("active");
+    if(["PM2.5","PM10","PM1.0"].includes(b.textContent)) b.classList.remove("active");
   });
   btn.classList.add("active");
-  renderLayers();
+  const titles = {pm25:"PM2.5",pm10:"PM10",pm1:"PM1.0"};
+  document.getElementById("legend-title").textContent = "Zona Kualitas Udara · "+titles[layer];
+  renderAll();
 }
 
-function toggleView(mode, btn) {
+function setView(mode, btn) {
   viewMode = mode;
-  ["btn-heat","btn-route","btn-both"].forEach(id =>
+  ["btn-kontur","btn-rute","btn-both"].forEach(id =>
     document.getElementById(id).classList.remove("active")
   );
   btn.classList.add("active");
-  renderLayers();
+  renderAll();
 }
 
-// ── Auto-refresh setiap 30 detik ──────────────────────
+function setRes(size, btn) {
+  gridSize = size;
+  ["res-med","res-hi"].forEach(id =>
+    document.getElementById(id).classList.remove("active")
+  );
+  btn.classList.add("active");
+  renderAll();
+}
+
+// ── Start ──────────────────────────────────────────
 loadData();
 setInterval(loadData, 30000);
 </script>
