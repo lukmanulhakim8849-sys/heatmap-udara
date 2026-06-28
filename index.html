@@ -60,11 +60,46 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#0f0f1f; color:#fff; 
     <div class="header-sub" id="last-update">Memuat data...</div>
   </div>
   <div class="stats">
-    <div class="stat"><div class="stat-label">PM2.5 avg</div><div class="stat-val" id="avg-pm25" style="color:#facc15">—</div></div>
-    <div class="stat"><div class="stat-label">PM10 avg</div><div class="stat-val" id="avg-pm10" style="color:#fb923c">—</div></div>
-    <div class="stat"><div class="stat-label">PM1.0 avg</div><div class="stat-val" id="avg-pm1" style="color:#a78bfa">—</div></div>
-    <div class="stat"><div class="stat-label">Titik data</div><div class="stat-val" id="total-points" style="color:#60a5fa">—</div></div>
-    <div class="stat"><div class="stat-label">Terburuk</div><div class="stat-val" id="worst-status" style="font-size:10px;padding-top:5px">—</div></div>
+    <!-- Nilai SEKARANG (titik terbaru) -->
+    <div class="stat" style="border-color:#22c55e">
+      <div class="stat-label" style="color:#22c55e">▶ PM2.5 skrg</div>
+      <div class="stat-val" id="now-pm25" style="color:#34d399">—</div>
+    </div>
+    <div class="stat" style="border-color:#22c55e">
+      <div class="stat-label" style="color:#22c55e">▶ PM10 skrg</div>
+      <div class="stat-val" id="now-pm10" style="color:#34d399">—</div>
+    </div>
+    <div class="stat" style="border-color:#22c55e">
+      <div class="stat-label" style="color:#22c55e">▶ PM1.0 skrg</div>
+      <div class="stat-val" id="now-pm1" style="color:#34d399">—</div>
+    </div>
+    <div class="stat" style="border-color:#22c55e">
+      <div class="stat-label" style="color:#22c55e">▶ Status skrg</div>
+      <div class="stat-val" id="now-status" style="font-size:10px;padding-top:5px">—</div>
+    </div>
+    <!-- Pembatas -->
+    <div style="width:1px;background:#3a3a5c;margin:0 4px"></div>
+    <!-- Nilai RATA-RATA (historis) -->
+    <div class="stat">
+      <div class="stat-label">PM2.5 avg</div>
+      <div class="stat-val" id="avg-pm25" style="color:#facc15">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">PM10 avg</div>
+      <div class="stat-val" id="avg-pm10" style="color:#fb923c">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">PM1.0 avg</div>
+      <div class="stat-val" id="avg-pm1" style="color:#a78bfa">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Titik data</div>
+      <div class="stat-val" id="total-points" style="color:#60a5fa">—</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Terburuk</div>
+      <div class="stat-val" id="worst-status" style="font-size:10px;padding-top:5px">—</div>
+    </div>
   </div>
 </div>
 
@@ -111,7 +146,7 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#0f0f1f; color:#fff; 
 // ══════════════════════════════════════════════════
 // GANTI DENGAN URL APPS SCRIPT KAMU
 // ══════════════════════════════════════════════════
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoDdNQ_DhLhrk3YUpxB7QktitPeTKKyuD7F8S9UQLjtIChqTYCN4kp7KGR7UuSyMDZ/exec";
+const APPS_SCRIPT_URL = "GANTI_DENGAN_URL_APPS_SCRIPT_KAMU";
 
 // ── State ──────────────────────────────────────────
 let allData     = [];
@@ -124,8 +159,8 @@ let markerGroup = null;
 
 // ── Map ────────────────────────────────────────────
 const map = L.map("map", { zoomControl:true }).setView([-6.2, 106.816], 14);
-L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-  attribution:"© Esri © OpenStreetMap", maxZoom:19
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+  attribution:"© OpenStreetMap © CARTO", maxZoom:19
 }).addTo(map);
 
 // Re-render kontur setiap kali peta di-zoom/pan
@@ -348,14 +383,42 @@ function updateStats() {
   const avg = arr => Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
   const v25 = allData.map(d=>Number(d.pm25));
   const v10 = allData.map(d=>Number(d.pm10));
+  const v1  = allData.map(d=>Number(d.pm1));
+
+  // Rata-rata historis
   document.getElementById("avg-pm25").textContent = avg(v25);
   document.getElementById("avg-pm10").textContent = avg(v10);
-  const v1 = allData.map(d=>Number(d.pm1));
-document.getElementById("avg-pm1").textContent = avg(v1);
+  document.getElementById("avg-pm1").textContent  = avg(v1);
   document.getElementById("total-points").textContent = allData.length;
   const ql = qualityLabel(Math.max(...v25));
   const ws = document.getElementById("worst-status");
   ws.textContent = ql.text; ws.style.color = ql.fg;
+
+  // Nilai SEKARANG (titik terbaru)
+  const latest = allData[allData.length - 1];
+  if (latest) {
+    const nowPm25 = Number(latest.pm25);
+    const nowPm10 = Number(latest.pm10);
+    const nowPm1  = Number(latest.pm1);
+    const nowQl   = qualityLabel(nowPm25);
+
+    document.getElementById("now-pm25").textContent   = nowPm25;
+    document.getElementById("now-pm10").textContent   = nowPm10;
+    document.getElementById("now-pm1").textContent    = nowPm1;
+
+    const ns = document.getElementById("now-status");
+    ns.textContent  = nowQl.text;
+    ns.style.color  = nowQl.fg;
+
+    // Warna border stat "skrg" berdasarkan kualitas
+    const nowColor = nowPm25<=15?"#22c55e":nowPm25<=35?"#eab308":nowPm25<=55?"#f97316":nowPm25<=150?"#ef4444":"#7c3aed";
+    ["now-pm25","now-pm10","now-pm1","now-status"].forEach(id => {
+      const el = document.getElementById(id).closest(".stat");
+      if (el) el.style.borderColor = nowColor;
+      const lbl = el ? el.querySelector(".stat-label") : null;
+      if (lbl) lbl.style.color = nowColor;
+    });
+  }
 }
 
 // ── Control handlers ───────────────────────────────
