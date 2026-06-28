@@ -43,7 +43,15 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#0f0f1f; color:#fff; 
 .popup-row { display:flex; justify-content:space-between; gap:10px; font-size:12px; color:#333; margin-bottom:3px; }
 .popup-badge { display:inline-block; padding:3px 10px; border-radius:5px; font-size:11px; font-weight:700; margin-top:6px; }
 
-/* Loading */
+.filter-bar { background:#0f0f1f; padding:7px 18px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-bottom:1px solid #2a2a4a; font-size:12px; }
+.filter-bar label { color:#888; font-size:11px; }
+.date-input { background:#252540; border:1px solid #3a3a5c; border-radius:6px; color:#fff; padding:5px 10px; font-size:12px; cursor:pointer; }
+.date-input:focus { outline:none; border-color:#6366f1; }
+.session-btn { background:#252540; border:1px solid #3a3a5c; border-radius:6px; color:#fff; padding:5px 12px; font-size:11px; cursor:pointer; white-space:nowrap; }
+.session-btn:hover { background:#3a3a6a; }
+.session-btn.active { background:#4f46e5; border-color:#6366f1; }
+.clear-btn { background:#7c1d1d; border:1px solid #ef4444; border-radius:6px; color:#fca5a5; padding:5px 12px; font-size:11px; cursor:pointer; }
+.clear-btn:hover { background:#991b1b; }
 #loading { position:absolute; inset:0; background:rgba(10,10,25,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:2000; gap:12px; }
 .spinner { width:36px; height:36px; border:3px solid #3a3a5c; border-top-color:#6366f1; border-radius:50%; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -118,7 +126,15 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#0f0f1f; color:#fff; 
   <button class="btn refresh-btn" onclick="loadData()">🔄 Refresh</button>
 </div>
 
-<div class="map-wrap">
+<div class="filter-bar">
+  <label>📅 Filter Tanggal:</label>
+  <input type="date" class="date-input" id="filter-start" onchange="applyFilter()">
+  <span style="color:#666">s/d</span>
+  <input type="date" class="date-input" id="filter-end" onchange="applyFilter()">
+  <div id="session-btns" style="display:flex;gap:6px;flex-wrap:wrap;margin-left:8px"></div>
+  <button class="clear-btn" onclick="clearFilter()">✕ Reset filter</button>
+  <span id="filter-info" style="color:#888;font-size:11px;margin-left:auto"></span>
+</div>
   <div id="map"></div>
 
   <div class="legend">
@@ -149,22 +165,21 @@ body { font-family:'Segoe UI',Arial,sans-serif; background:#0f0f1f; color:#fff; 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwoDdNQ_DhLhrk3YUpxB7QktitPeTKKyuD7F8S9UQLjtIChqTYCN4kp7KGR7UuSyMDZ/exec";
 
 // ── State ──────────────────────────────────────────
-let allData     = [];
+let allData     = [];   // semua data dari Sheets
+let filteredData= [];   // data setelah filter tanggal
 let activeLayer = "pm25";
 let viewMode    = "both";
-let gridSize    = 60;     // resolusi grid kontur (px)
+let gridSize    = 60;
 let konturLayer = null;
 let routeLayer  = null;
 let markerGroup = null;
 
 // ── Map ────────────────────────────────────────────
 const map = L.map("map", { zoomControl:true }).setView([-6.2, 106.816], 14);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-  attribution:"© OpenStreetMap © CARTO", maxZoom:19
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  attribution:"© Esri © OpenStreetMap", maxZoom:19
 }).addTo(map);
-
-// Re-render kontur setiap kali peta di-zoom/pan
-map.on("moveend zoomend", () => { if (allData.length) renderKontur(); });
+map.on("moveend zoomend", () => { if (filteredData.length) renderKontur(); });
 
 // ── Threshold per layer ────────────────────────────
 const THRESH = {
@@ -194,6 +209,99 @@ function getVal(d) {
   return Number(activeLayer==="pm25" ? d.pm25 : activeLayer==="pm10" ? d.pm10 : d.pm1);
 }
 
+// ── Parse tanggal dari timestamp Indonesia ─────────
+// Format: "28/6/2026, 15.08.24" atau "28/6/2026 15:08:24"
+function parseDate(ts) {
+  if (!ts) return null;
+  const part = ts.split(",")[0].trim(); // ambil bagian tanggal saja
+  const [d,m,y] = part.split("/");
+  if (!d||!m||!y) return null;
+  return new Date(parseInt(y), parseInt(m)-1, parseInt(d));
+}
+
+function dateToStr(d) {
+  // Format: YYYY-MM-DD untuk input[type=date]
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+// ── Bangun tombol sesi (per tanggal unik) ──────────
+function buildSessionBtns() {
+  const dates = {};
+  allData.forEach(d => {
+    const dt = parseDate(d.timestamp);
+    if (dt) {
+      const key = dateToStr(dt);
+      if (!dates[key]) dates[key] = 0;
+      dates[key]++;
+    }
+  });
+  const container = document.getElementById("session-btns");
+  container.innerHTML = "";
+  Object.keys(dates).sort().forEach(key => {
+    const [y,m,dd] = key.split("-");
+    const label = `${dd}/${m}/${y} (${dates[key]} titik)`;
+    const btn = document.createElement("button");
+    btn.className = "session-btn";
+    btn.textContent = label;
+    btn.onclick = () => {
+      document.getElementById("filter-start").value = key;
+      document.getElementById("filter-end").value   = key;
+      document.querySelectorAll(".session-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      applyFilter();
+    };
+    container.appendChild(btn);
+  });
+}
+
+// ── Apply filter tanggal ───────────────────────────
+function applyFilter() {
+  const start = document.getElementById("filter-start").value;
+  const end   = document.getElementById("filter-end").value;
+
+  if (!start && !end) {
+    filteredData = allData;
+  } else {
+    filteredData = allData.filter(d => {
+      const dt = parseDate(d.timestamp);
+      if (!dt) return false;
+      const key = dateToStr(dt);
+      if (start && key < start) return false;
+      if (end   && key > end)   return false;
+      return true;
+    });
+  }
+
+  const info = document.getElementById("filter-info");
+  if (start || end) {
+    info.textContent = `Menampilkan ${filteredData.length} dari ${allData.length} titik`;
+  } else {
+    info.textContent = `Total ${allData.length} titik`;
+  }
+
+  updateStats();
+  renderAll();
+  if (filteredData.length) {
+    const ll = filteredData.map(d=>[Number(d.lat),Number(d.lng)]);
+    map.fitBounds(L.latLngBounds(ll).pad(0.15));
+  }
+}
+
+// ── Reset filter ───────────────────────────────────
+function clearFilter() {
+  document.getElementById("filter-start").value = "";
+  document.getElementById("filter-end").value   = "";
+  document.querySelectorAll(".session-btn").forEach(b=>b.classList.remove("active"));
+  filteredData = allData;
+  document.getElementById("filter-info").textContent = `Total ${allData.length} titik`;
+  updateStats();
+  renderAll();
+  if (filteredData.length) {
+    const ll = filteredData.map(d=>[Number(d.lat),Number(d.lng)]);
+    map.fitBounds(L.latLngBounds(ll).pad(0.15));
+  }
+}
+
 // ── IDW interpolasi ────────────────────────────────
 // Interpolasi nilai di titik (lat,lng) dari data sekitarnya
 function idw(lat, lng, points, power=2) {
@@ -211,9 +319,9 @@ function idw(lat, lng, points, power=2) {
 // ── Render kontur ──────────────────────────────────
 function renderKontur() {
   if (konturLayer) { map.removeLayer(konturLayer); konturLayer = null; }
-  if (!allData.length) return;
+  if (!filteredData.length) return;
 
-  const points = allData.map(d => ({
+  const points = filteredData.map(d => ({
     lat: Number(d.lat), lng: Number(d.lng), val: getVal(d)
   }));
 
@@ -282,20 +390,18 @@ function renderKontur() {
 function renderRoute() {
   if (routeLayer)  { map.removeLayer(routeLayer);  routeLayer  = null; }
   if (markerGroup) { map.removeLayer(markerGroup); markerGroup = null; }
-  if (!allData.length) return;
+  if (!filteredData.length) return;
 
-  const latlngs = allData.map(d=>[Number(d.lat),Number(d.lng)]);
-
-  // Garis rute putih tipis
+  const latlngs = filteredData.map(d=>[Number(d.lat),Number(d.lng)]);
   routeLayer = L.polyline(latlngs, { color:"rgba(255,255,255,0.5)", weight:3, dashArray:"6,4" }).addTo(map);
 
   markerGroup = L.layerGroup();
-  allData.forEach((d,i) => {
+  filteredData.forEach((d,i) => {
     const val  = getVal(d);
     const zone = getZone(val);
     const [r,g,b] = COLORS[zone];
     const color = `rgb(${r},${g},${b})`;
-    const isEnd = i===0 || i===allData.length-1;
+    const isEnd = i===0 || i===filteredData.length-1;
     const ql    = qualityLabel(Number(d.pm25));
 
     const m = L.circleMarker([Number(d.lat),Number(d.lng)], {
@@ -360,12 +466,8 @@ async function loadData() {
     allData = json.data.filter(d =>
       d.lat && d.lng && Math.abs(d.lat)>0.001 && Math.abs(d.lng)>0.001
     );
-    updateStats();
-    renderAll();
-    if (allData.length) {
-      const ll = allData.map(d=>[Number(d.lat),Number(d.lng)]);
-      map.fitBounds(L.latLngBounds(ll).pad(0.15));
-    }
+    buildSessionBtns();
+    applyFilter();
     document.getElementById("last-update").textContent =
       "Update: " + new Date().toLocaleString("id-ID");
   } catch(e) {
@@ -379,38 +481,32 @@ async function loadData() {
 
 // ── Stat cards ─────────────────────────────────────
 function updateStats() {
-  if (!allData.length) return;
+  if (!filteredData.length) return;
   const avg = arr => Math.round(arr.reduce((a,b)=>a+b,0)/arr.length);
-  const v25 = allData.map(d=>Number(d.pm25));
-  const v10 = allData.map(d=>Number(d.pm10));
-  const v1  = allData.map(d=>Number(d.pm1));
+  const v25 = filteredData.map(d=>Number(d.pm25));
+  const v10 = filteredData.map(d=>Number(d.pm10));
+  const v1  = filteredData.map(d=>Number(d.pm1));
 
-  // Rata-rata historis
   document.getElementById("avg-pm25").textContent = avg(v25);
   document.getElementById("avg-pm10").textContent = avg(v10);
   document.getElementById("avg-pm1").textContent  = avg(v1);
-  document.getElementById("total-points").textContent = allData.length;
+  document.getElementById("total-points").textContent = filteredData.length;
   const ql = qualityLabel(Math.max(...v25));
   const ws = document.getElementById("worst-status");
   ws.textContent = ql.text; ws.style.color = ql.fg;
 
-  // Nilai SEKARANG (titik terbaru)
-  const latest = allData[allData.length - 1];
+  // Nilai terbaru dari data yang difilter
+  const latest = filteredData[filteredData.length - 1];
   if (latest) {
     const nowPm25 = Number(latest.pm25);
     const nowPm10 = Number(latest.pm10);
     const nowPm1  = Number(latest.pm1);
     const nowQl   = qualityLabel(nowPm25);
-
-    document.getElementById("now-pm25").textContent   = nowPm25;
-    document.getElementById("now-pm10").textContent   = nowPm10;
-    document.getElementById("now-pm1").textContent    = nowPm1;
-
+    document.getElementById("now-pm25").textContent = nowPm25;
+    document.getElementById("now-pm10").textContent = nowPm10;
+    document.getElementById("now-pm1").textContent  = nowPm1;
     const ns = document.getElementById("now-status");
-    ns.textContent  = nowQl.text;
-    ns.style.color  = nowQl.fg;
-
-    // Warna border stat "skrg" berdasarkan kualitas
+    ns.textContent = nowQl.text; ns.style.color = nowQl.fg;
     const nowColor = nowPm25<=15?"#22c55e":nowPm25<=35?"#eab308":nowPm25<=55?"#f97316":nowPm25<=150?"#ef4444":"#7c3aed";
     ["now-pm25","now-pm10","now-pm1","now-status"].forEach(id => {
       const el = document.getElementById(id).closest(".stat");
